@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import requests
+import gevent
 
-import core
+from core import ge
 
 
-class TestHandler(core.Handler):
+class TestHandler(ge.Handler):
     def initialize(self, s):
         self.s = s
 
@@ -12,6 +13,9 @@ class TestHandler(core.Handler):
         return self.s.get(url).text.encode('utf-8')
 
     def parse(self, html):
+        print html
+        self.put_url('http://www.acfun.tv')
+        gevent.sleep(10)
         return [dict(name='11', age=1)]
 
     def save(self, items, a, b):
@@ -21,7 +25,7 @@ class TestHandler(core.Handler):
 s = requests.Session()
 
 
-class Application(core.Application):
+class Application(ge.Application):
     def __init__(self):
         settings = dict(
             worker_num=2,
@@ -31,12 +35,10 @@ class Application(core.Application):
             (r"http://([^\.]+)\.([^\d]+)\..*", TestHandler, dict(s=s)),
         ]
 
-        hub = core.Hub()
-        hub.put('http://www.baidu.com')
-
-        super(Application, self).__init__(handlers, hub, **settings)
+        super(Application, self).__init__(handlers, **settings)
 
 
 if __name__ == '__main__':
     app = Application()
+    app.url_queue.put('http://www.baidu.com')
     app.run()
