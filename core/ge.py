@@ -2,7 +2,6 @@
 """
 simple one process multiple coroutine crawler based on gevent.
 """
-
 import re
 import requests
 import traceback
@@ -10,8 +9,50 @@ import time
 
 from gevent import monkey; monkey.patch_all()
 import gevent
-from gevent import queue
 from gevent import Greenlet
+from gevent.queue import Queue
+import pymongo
+from bson.objectid import ObjectId
+
+
+class MongoQueue(Queue):
+    def __init__(self, username, password, database='queue', collection='url', host='127.0.0.1', port=27017):
+        super(MongoQueue, self).__init__()
+
+        client = pymongo.MongoClient(host, port)
+        db = client[database]
+        db.authenticate(username, password)
+        self.collection = db.get_collection(collection)
+
+        self.last = None
+        urls = self.collection.find_one({'status': 1})
+        if urls:
+            self.last = urls['_id']
+            for url in urls.get('urls', []):
+                super(MongoQueue, self).put(url)
+
+    def get(self, *args, **kwargs):
+        if super(MongoQueue, self).empty():
+            try:
+                self.collection.update({'_id': ObjectId(self.last), 'status': 1}, {'$set': {'status': 2}})
+            except:
+                pass
+            urls = self.collection.find_one_and_update({'status': 0}, {'$set': {'status': 1}})
+            if urls:
+                self.last = urls['_id']
+                for url in urls.get('urls', []):
+                    super(MongoQueue, self).put(url)
+
+        return super(MongoQueue, self).get(*args, **kwargs)
+
+    def put(self, item, *args, **kwargs):
+        if super(MongoQueue, self).qsize() >= 50:
+            urls = []
+            while not super(MongoQueue, self).empty():
+                urls.append(super(MongoQueue, self).get())
+            self.collection.insert_one({'status': 0, 'urls': urls})
+
+        super(MongoQueue, self).put(item, *args, **kwargs)
 
 
 class Handler(object):
@@ -83,7 +124,7 @@ class Application(object):
         self.handlers = handlers
 
         if not url_queue:
-            url_queue = queue.Queue()
+            url_queue = Queue()
         self.url_queue = url_queue
 
         for _ in range(worker_num):
