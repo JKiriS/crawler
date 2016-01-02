@@ -34,9 +34,8 @@ class Application(ge.Application):
         handlers = [
             (r"http://([^\.]+)\.([^\d]+)\..*", TestHandler, dict(s=s)),
         ]
-        queue = ge.MongoQueue('JKiriS', '910813gyb', host='115.156.196.9')
 
-        super(Application, self).__init__(handlers, queue, **settings)
+        super(Application, self).__init__(handlers,  **settings)
 
 
 if __name__ == '__main__':
